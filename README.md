@@ -1,1 +1,1 @@
-# Stylus Uniswap Workshop
+# Stylus Beacon Proxy Workshop
