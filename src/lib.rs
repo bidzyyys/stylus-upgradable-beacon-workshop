@@ -1,82 +1,62 @@
-//!
-//! Stylus Hello World
-//!
-//! The following contract implements the Counter example from Foundry.
-//!
-//! ```solidity
-//! contract Counter {
-//!     uint256 public number;
-//!     function setNumber(uint256 newNumber) public {
-//!         number = newNumber;
-//!     }
-//!     function increment() public {
-//!         number++;
-//!     }
-//! }
-//! ```
-//!
-//! The program is ABI-equivalent with Solidity, which means you can call it from both Solidity and Rust.
-//! To do this, run `cargo stylus export-abi`.
-//!
-//! Note: this code is a template-only and has not been audited.
-//!
-// Allow `cargo stylus export-abi` to generate a main function.
 #![cfg_attr(not(any(test, feature = "export-abi")), no_main)]
-#![cfg_attr(not(any(test, feature = "export-abi")), no_std)]
-
-#[macro_use]
 extern crate alloc;
 
 use alloc::vec::Vec;
 
-/// Import items from the SDK. The prelude contains common traits and macros.
-use stylus_sdk::{alloy_primitives::U256, prelude::*};
+use openzeppelin_stylus::{
+    access::ownable::IOwnable,
+    proxy::beacon::{
+        upgradeable::{self, IUpgradeableBeacon, UpgradeableBeacon},
+        IBeacon,
+    },
+};
+use stylus_sdk::{alloy_primitives::Address, prelude::*};
 
-// Define some persistent storage using the Solidity ABI.
-// `Counter` will be the entrypoint.
-sol_storage! {
-    #[entrypoint]
-    pub struct Counter {
-        uint256 number;
-    }
+#[entrypoint]
+#[storage]
+struct UpgradeableBeaconWorkshop {
+    upgradeable_beacon: UpgradeableBeacon,
 }
 
-/// Declare that `Counter` is a contract with the following external methods.
 #[public]
-impl Counter {
-    /// Gets the number from storage.
-    pub fn number(&self) -> U256 {
-        self.number.get()
-    }
-
-    /// Sets a number in storage to a user-specified value.
-    pub fn set_number(&mut self, new_number: U256) {
-        self.number.set(new_number);
-    }
-
-    /// Sets a number in storage to a user-specified value.
-    pub fn mul_number(&mut self, new_number: U256) {
-        self.number.set(new_number * self.number.get());
-    }
-
-    /// Sets a number in storage to a user-specified value.
-    pub fn add_number(&mut self, new_number: U256) {
-        self.number.set(new_number + self.number.get());
-    }
-
-    /// Increments `number` and updates its value in storage.
-    pub fn increment(&mut self) {
-        let number = self.number.get();
-        self.set_number(number + U256::from(1));
-    }
-
-    /// Adds the wei value from msg_value to the number in storage.
-    #[payable]
-    pub fn add_from_msg_value(&mut self) {
-        let number = self.number.get();
-        self.set_number(number + self.vm().msg_value());
+#[implements(IUpgradeableBeacon, IOwnable, IBeacon)]
+impl UpgradeableBeaconWorkshop {
+    #[constructor]
+    pub fn constructor(
+        &mut self,
+        implementation: Address,
+        initial_owner: Address,
+    ) -> Result<(), upgradeable::Error> {
+        self.upgradeable_beacon
+            .constructor(implementation, initial_owner)
     }
 }
 
-#[cfg(test)]
-mod test {}
+#[public]
+impl IUpgradeableBeacon for UpgradeableBeaconWorkshop {
+    fn upgrade_to(&mut self, new_implementation: Address) -> Result<(), Vec<u8>> {
+        Ok(self.upgradeable_beacon.upgrade_to(new_implementation)?)
+    }
+}
+
+#[public]
+impl IBeacon for UpgradeableBeaconWorkshop {
+    fn implementation(&self) -> Result<Address, Vec<u8>> {
+        self.upgradeable_beacon.implementation()
+    }
+}
+
+#[public]
+impl IOwnable for UpgradeableBeaconWorkshop {
+    fn owner(&self) -> Address {
+        self.upgradeable_beacon.owner()
+    }
+
+    fn transfer_ownership(&mut self, new_owner: Address) -> Result<(), Vec<u8>> {
+        self.upgradeable_beacon.transfer_ownership(new_owner)
+    }
+
+    fn renounce_ownership(&mut self) -> Result<(), Vec<u8>> {
+        self.upgradeable_beacon.renounce_ownership()
+    }
+}
